@@ -6,6 +6,7 @@ type SqlPlus struct {
 	*sql.DB
 }
 
+
 func (pg SqlPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
 	var b binder
 
