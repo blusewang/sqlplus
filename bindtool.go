@@ -10,7 +10,7 @@ import (
 type bindTool struct{}
 
 func (bt bindTool) mustLimit1(query string) string {
-	if strings.Contains(strings.ToLower(query), "limit") {
+	if !strings.Contains(strings.ToLower(query), "limit") {
 		query += " limit 1"
 	}
 	return query
