@@ -2,12 +2,11 @@ package sqlplus
 
 import "database/sql"
 
-type SqlPlus struct {
-	*sql.DB
+type TxPlus struct {
+	*sql.Tx
 }
 
-
-func (pg SqlPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
+func (tx TxPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
 	var b binder
 
 	err = b.analysisStruct(obj)
@@ -15,7 +14,7 @@ func (pg SqlPlus) QueryStruct(obj interface{}, query string, args ...interface{}
 		return
 	}
 
-	b.rows, err = pg.Query(b.mustLimit1(query), args...)
+	b.rows, err = tx.Query(b.mustLimit1(query), args...)
 	if err != nil {
 		return
 	}
@@ -29,7 +28,7 @@ func (pg SqlPlus) QueryStruct(obj interface{}, query string, args ...interface{}
 	return
 }
 
-func (pg SqlPlus) QuerySlice(list interface{}, query string, args ...interface{}) (err error) {
+func (tx TxPlus) QuerySlice(list interface{}, query string, args ...interface{}) (err error) {
 	var b binder
 
 	err = b.analysisSlice(list)
@@ -37,7 +36,7 @@ func (pg SqlPlus) QuerySlice(list interface{}, query string, args ...interface{}
 		return
 	}
 
-	b.rows, err = pg.Query(query, args...)
+	b.rows, err = tx.Query(query, args...)
 	if err != nil {
 		return
 	}
