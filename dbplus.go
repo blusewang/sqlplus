@@ -7,6 +7,7 @@ type DbPlus struct {
 }
 
 func Open(driverName, dataSourceName string) (db *DbPlus, err error) {
+	db = &DbPlus{}
 	db.DB, err = sql.Open(driverName, dataSourceName)
 	return
 }
