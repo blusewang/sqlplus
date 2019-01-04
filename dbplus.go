@@ -6,10 +6,11 @@ type DbPlus struct {
 	*sql.DB
 }
 
-func Open(driverName, dataSourceName string) (db *DbPlus, err error) {
-	db = &DbPlus{}
+func Open(driverName, dataSourceName string) (*DbPlus, error) {
+	db := &DbPlus{}
+	var err error
 	db.DB, err = sql.Open(driverName, dataSourceName)
-	return
+	return db, err
 }
 
 func (db DbPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
@@ -56,7 +57,9 @@ func (db DbPlus) QuerySlice(list interface{}, query string, args ...interface{})
 	return
 }
 
-func (db DbPlus) Begin() (tx *TxPlus, err error) {
+func (db DbPlus) Begin() (*TxPlus, error) {
+	tx := &TxPlus{}
+	var err error
 	tx.Tx, err = db.DB.Begin()
-	return
+	return tx, err
 }

@@ -43,6 +43,8 @@ func (bt bindTool) canScan(t1 reflect.Type, t2 reflect.Type) bool {
 	} else {
 		if t1.String()[0:3] == "int" {
 			return t1.String()[0:3] == "int" && t2.String()[0:3] == "int"
+		} else if t1.String() == "time.Time" && t2.String() == "pq.NullTime" {
+			return true
 		} else {
 			return false
 		}
