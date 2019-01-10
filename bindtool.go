@@ -77,9 +77,9 @@ func (bt bindTool) decode(v reflect.Value) (keys map[string]reflect.Value) {
 }
 
 func (bt bindTool) getTag(t reflect.StructTag) (tag string) {
-	if tag = t.Get("json"); tag == "" {
-		if tag = t.Get("xml"); tag == "" {
-			tag = t.Get("sql")
+	if tag = t.Get("sql"); tag == "" {
+		if tag = t.Get("json"); tag == "" {
+			tag = t.Get("xml")
 		}
 	}
 	return
