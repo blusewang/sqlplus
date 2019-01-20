@@ -4,11 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
+	"strings"
 )
 
 type binder struct {
-	bindTool
 	rows   *sql.Rows
 	ats    reflect.Type
 	avs    reflect.Value
@@ -42,9 +43,9 @@ func (b *binder) parseSlideAll() (err error) {
 		return
 	}
 
-	b.keys = b.decode(b.item.Elem())
+	b.decode(b.item.Elem())
 
-	b.fields, err = b.merge(cts, b.keys)
+	err = b.merge(cts)
 	if err != nil {
 		return
 	}
@@ -79,9 +80,9 @@ func (b *binder) parseStruct() (err error) {
 		return
 	}
 
-	b.keys = b.decode(b.item.Elem())
+	b.decode(b.item.Elem())
 
-	b.fields, err = b.merge(cts, b.keys)
+	err = b.merge(cts)
 	if err != nil {
 		return
 	}
@@ -89,5 +90,81 @@ func (b *binder) parseStruct() (err error) {
 	b.rows.Next()
 	err = b.rows.Scan(b.fields...)
 
+	return
+}
+
+func (b *binder) mustLimit1(query string) string {
+	if !strings.Contains(strings.ToLower(query), "limit") {
+		query += " limit 1"
+	}
+	return query
+}
+
+func (b *binder) merge(cts []*sql.ColumnType) (err error) {
+	for _, v := range cts {
+		if f := b.keys[v.Name()]; f.CanAddr() && f.Addr().CanInterface() {
+			// 要先检查类型是否匹配
+			if b.canScan(v.ScanType(), f.Type()) {
+				b.fields = append(b.fields, f.Addr().Interface())
+			} else {
+				log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
+				b.fields = append(b.fields, reflect.New(v.ScanType()).Interface())
+			}
+		} else {
+			/*
+				如果查询出的字段，不在struct有标记的field中，会导致Scan时数量对不上的问题
+				为了补齐，需创建一个对应字段类型的变量指针
+			*/
+			f := reflect.New(v.ScanType())
+			b.fields = append(b.fields, f.Interface())
+		}
+	}
+	return
+}
+
+func (b *binder) canScan(t1 reflect.Type, t2 reflect.Type) bool {
+	if t1 == t2 {
+		return true
+	} else {
+		if t1.String()[0:3] == "int" {
+			return t1.String()[0:3] == "int" && t2.String()[0:3] == "int"
+		} else if t1.String() == "time.Time" && t2.String() == "pq.NullTime" {
+			return true
+		} else {
+			return false
+		}
+	}
+}
+
+func (b *binder) decode(v reflect.Value) {
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		tag := b.getTag(v.Type().Field(i).Tag)
+
+		if tag == "" {
+			if f.Kind() == reflect.Struct {
+				// 没有tag的类型引用
+				b.decode(f.Addr().Elem())
+			}
+		} else {
+			/*
+				只要有tag，视为解析的终点
+				因为一条记录是一个线形的一维数组，不是树形结构
+			*/
+			if f.CanInterface() && f.CanAddr() {
+				// 忽略得到了类型，也无法赋值的私有类型
+				b.keys[tag] = f
+			}
+		}
+	}
+	return
+}
+
+func (b *binder) getTag(t reflect.StructTag) (tag string) {
+	if tag = t.Get("json"); tag == "" {
+		if tag = t.Get("xml"); tag == "" {
+			tag = t.Get("sql")
+		}
+	}
 	return
 }
