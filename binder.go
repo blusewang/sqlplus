@@ -161,9 +161,9 @@ func (b *binder) decode(v reflect.Value) {
 }
 
 func (b *binder) getTag(t reflect.StructTag) (tag string) {
-	if tag = t.Get("json"); tag == "" {
-		if tag = t.Get("xml"); tag == "" {
-			tag = t.Get("sql")
+	if tag = t.Get("sql"); tag == "" {
+		if tag = t.Get("json"); tag == "" {
+			tag = t.Get("xml")
 		}
 	}
 	return
