@@ -104,7 +104,8 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 	for _, v := range cts {
 		if f := b.keys[v.Name()]; f.CanAddr() && f.Addr().CanInterface() {
 			// 要先检查类型是否匹配
-			if b.canScan(v.ScanType(), f.Type()) {
+
+			if b.canScan(v, f.Type()) {
 				b.fields = append(b.fields, f.Addr().Interface())
 			} else {
 				log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
@@ -122,13 +123,19 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 	return
 }
 
-func (b *binder) canScan(t1 reflect.Type, t2 reflect.Type) bool {
-	if t1 == t2 {
+func (b *binder) canScan(t1 *sql.ColumnType, t2 reflect.Type) bool {
+	if t1.ScanType() == t2 {
 		return true
 	} else {
-		if t1.String()[0:3] == "int" {
-			return t1.String()[0:3] == "int" && t2.String()[0:3] == "int"
-		} else if t1.String() == "time.Time" && t2.String() == "pq.NullTime" {
+		if t1.DatabaseTypeName()[0:3] == "INT" {
+			return t1.ScanType().String()[0:3] == "int" && t2.String()[0:3] == "int"
+		} else if t1.ScanType().String() == "time.Time" && t2.String() == "pq.NullTime" {
+			return true
+		} else if t1.DatabaseTypeName() == "_INT4" && t2.String() == "pq.Int64Array" {
+			return true
+		} else if t1.DatabaseTypeName() == "_VARCHAR" && t2.String() == "pq.StringArray" {
+			return true
+		} else if t1.DatabaseTypeName() == "TEXT" && t2.String() == "sql.NullString" {
 			return true
 		} else {
 			return false
