@@ -124,7 +124,7 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 }
 
 func (b *binder) canScan(t1 *sql.ColumnType, t2 reflect.Type) bool {
-	if t1.ScanType() == t2 {
+	if t1.ScanType() == t2 || "*"+t1.ScanType().String() == t2.String() {
 		return true
 	} else {
 		if t1.DatabaseTypeName()[0:3] == "INT" {
