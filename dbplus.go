@@ -37,7 +37,7 @@ func (db *DbPlus) detect(sql string) *sql.DB {
 	} else if len(db.dbs) == 1 {
 		return db.dbs[0]
 	} else {
-		if db.p == 0 || db.p > uint8(len(db.dbs)) {
+		if db.p == 0 || db.p >= uint8(len(db.dbs)) {
 			db.p = 1
 		}
 		defer func() {
@@ -103,6 +103,14 @@ func (db *DbPlus) BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxPlus, er
 	var err error
 	tx.Tx, err = db.dbs[0].BeginTx(ctx, opts)
 	return tx, err
+}
+
+func (db *DbPlus) Prepare(query string) (*sql.Stmt, error) {
+	return db.PrepareContext(context.Background(), query)
+}
+
+func (db *DbPlus) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	return db.detect(query).PrepareContext(ctx, query)
 }
 
 func (db *DbPlus) Exec(query string, args ...interface{}) (sql.Result, error) {
