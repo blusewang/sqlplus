@@ -3,6 +3,7 @@ golang databse/sql 的通用扩展
 
 [![GoDoc](https://godoc.org/github.com/blusewang/sqlplus?status.svg)](https://godoc.org/github.com/blusewang/sqlplus)
 [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://github.com/blusewang/sqlplus/blob/master/LICENSE)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fblusewang%2Fsqlplus.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fblusewang%2Fsqlplus?ref=badge_shield)
 
 ## 安装
 
@@ -55,3 +56,6 @@ if err != nil {
 log.Pringln(obj)
 // {3,""}
 ```
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fblusewang%2Fsqlplus.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fblusewang%2Fsqlplus?ref=badge_large)
