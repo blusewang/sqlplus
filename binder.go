@@ -94,7 +94,8 @@ func (b *binder) parseStruct() (err error) {
 }
 
 func (b *binder) mustLimit1(query string) string {
-	if !strings.Contains(strings.ToLower(query), "limit") {
+	query = strings.TrimSpace(query)
+	if !strings.Contains(strings.ToLower(query), "limit") && query[len(query)-1] != 42 {
 		query += " limit 1"
 	}
 	return query
