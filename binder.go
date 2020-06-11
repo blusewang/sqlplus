@@ -128,7 +128,7 @@ func (b *binder) canScan(t1 *sql.ColumnType, t2 reflect.Type) bool {
 	if t1.ScanType() == t2 || "*"+t1.ScanType().String() == t2.String() {
 		return true
 	} else {
-		if t1.DatabaseTypeName()[0:3] == "INT" {
+		if len(t1.DatabaseTypeName()) > 2 && t1.DatabaseTypeName()[0:3] == "INT" {
 			return t1.ScanType().String()[0:3] == "int" && t2.String()[0:3] == "int"
 		} else if t1.ScanType().String() == "time.Time" && t2.String() == "pq.NullTime" {
 			return true
