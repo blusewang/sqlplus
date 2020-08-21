@@ -3,6 +3,7 @@ package sqlplus
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -88,6 +89,18 @@ func (db *DbPlus) QuerySlice(list interface{}, query string, args ...interface{}
 		return
 	}
 
+	return
+}
+
+// 判断记录是否存在
+func (db *DbPlus) Exists(query string, args ...interface{}) (exists bool, err error) {
+	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") {
+		return false, errors.New("just support select query")
+	}
+	err = db.QueryRow(fmt.Sprintf("select exists (%s)", query), args...).Scan(&exists)
+	if err != nil && err == sql.ErrNoRows {
+		err = nil
+	}
 	return
 }
 
