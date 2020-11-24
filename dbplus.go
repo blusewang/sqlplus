@@ -38,12 +38,10 @@ func (db *DbPlus) detect(sql string) *sql.DB {
 	} else if len(db.dbs) == 1 {
 		return db.dbs[0]
 	} else {
+		db.p++
 		if db.p == 0 || db.p >= uint8(len(db.dbs)) {
 			db.p = 1
 		}
-		defer func() {
-			db.p++
-		}()
 		return db.dbs[db.p]
 	}
 }
