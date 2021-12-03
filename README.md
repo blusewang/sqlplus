@@ -1,5 +1,5 @@
 # sqlplus
-golang databse/sql 的通用扩展
+https://github.com/blusewang/pg 的咖啡伴侣
 
 [![GoDoc](https://godoc.org/github.com/blusewang/sqlplus?status.svg)](https://godoc.org/github.com/blusewang/sqlplus)
 [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://github.com/blusewang/sqlplus/blob/master/LICENSE)

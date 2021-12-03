@@ -145,6 +145,9 @@ func (b *binder) canScan(t1 *sql.ColumnType, t2 reflect.Type) bool {
 }
 
 func (b *binder) decode(v reflect.Value) {
+	if !v.IsValid() {
+		return
+	}
 	for i := 0; i < v.NumField(); i++ {
 		f := v.Field(i)
 		tag := b.getTag(v.Type().Field(i).Tag)

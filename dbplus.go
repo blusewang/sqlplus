@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/blusewang/pg"
 	"strings"
 	"time"
 )
@@ -32,6 +33,12 @@ func Open(driverName string, dsns ...string) (dp *DbPlus, err error) {
 	return
 }
 
+func (db *DbPlus) handleError(err error) {
+	if strings.Contains(err.Error(), "connection refused") {
+
+	}
+}
+
 func (db *DbPlus) detect(sql string) *sql.DB {
 	if !strings.HasPrefix(strings.ToLower(sql), "select") {
 		return db.dbs[0]
@@ -44,6 +51,24 @@ func (db *DbPlus) detect(sql string) *sql.DB {
 		}
 		return db.dbs[db.p]
 	}
+}
+
+func (db *DbPlus) Listen(channel string, handler func(string)) (err error) {
+	_, err = db.dbs[0].Exec(fmt.Sprintf("LISTEN %v", channel))
+	if err != nil {
+		return
+	}
+	pg.Listen(channel, handler)
+	return
+}
+
+func (db *DbPlus) UnListen(channel string) (err error) {
+	_, err = db.dbs[0].Exec(fmt.Sprintf("UNLISTEN %v", channel))
+	if err != nil {
+		return
+	}
+	pg.UnListen(channel)
+	return
 }
 
 func (db *DbPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
@@ -90,7 +115,7 @@ func (db *DbPlus) QuerySlice(list interface{}, query string, args ...interface{}
 	return
 }
 
-// 判断记录是否存在
+// Exists 判断记录是否存在
 func (db *DbPlus) Exists(query string, args ...interface{}) (exists bool, err error) {
 	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") {
 		return false, errors.New("just support select query")
