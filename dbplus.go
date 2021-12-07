@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/blusewang/pg"
 	"strings"
 	"time"
 )
@@ -51,24 +50,6 @@ func (db *DbPlus) detect(sql string) *sql.DB {
 		}
 		return db.dbs[db.p]
 	}
-}
-
-func (db *DbPlus) Listen(channel string, handler func(string)) (err error) {
-	_, err = db.dbs[0].Exec(fmt.Sprintf("LISTEN %v", channel))
-	if err != nil {
-		return
-	}
-	pg.Listen(channel, handler)
-	return
-}
-
-func (db *DbPlus) UnListen(channel string) (err error) {
-	_, err = db.dbs[0].Exec(fmt.Sprintf("UNLISTEN %v", channel))
-	if err != nil {
-		return
-	}
-	pg.UnListen(channel)
-	return
 }
 
 func (db *DbPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
