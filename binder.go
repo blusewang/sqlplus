@@ -2,6 +2,7 @@ package sqlplus
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -95,10 +96,24 @@ func (b *binder) parseStruct() (err error) {
 
 func (b *binder) mustLimit1(query string) string {
 	query = strings.TrimSpace(query)
-	if !strings.Contains(strings.ToLower(query), "limit") && query[len(query)-1] != 42 {
-		query += " limit 1"
-	}
+	//if !strings.Contains(strings.ToLower(query), "limit") && query[len(query)-1] != 42 {
+	//	query += " limit 1"
+	//}
 	return query
+}
+
+type jsonField struct {
+	Field interface{}
+}
+
+func (jf *jsonField) Scan(src interface{}) (err error) {
+	switch src.(type) {
+	case string:
+		err = json.Unmarshal([]byte(src.(string)), jf.Field)
+	case []byte:
+		err = json.Unmarshal(src.([]byte), jf.Field)
+	}
+	return
 }
 
 func (b *binder) merge(cts []*sql.ColumnType) (err error) {
@@ -109,8 +124,12 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 			if b.canScan(v, f.Type()) {
 				b.fields = append(b.fields, f.Addr().Interface())
 			} else {
-				log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
-				b.fields = append(b.fields, reflect.New(v.ScanType()).Interface())
+				if v.DatabaseTypeName() == "PgTypeJsonb" || v.DatabaseTypeName() == "PgTypeJson" {
+					b.fields = append(b.fields, &jsonField{f.Addr().Interface()})
+				} else {
+					log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
+					b.fields = append(b.fields, reflect.New(v.ScanType()).Interface())
+				}
 			}
 		} else {
 			/*
