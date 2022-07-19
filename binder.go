@@ -11,11 +11,16 @@ import (
 )
 
 type binder struct {
-	rows   *sql.Rows
-	ats    reflect.Type
-	avs    reflect.Value
-	item   reflect.Value
-	keys   map[string]reflect.Value
+	rows *sql.Rows
+	// ats 列表类型
+	ats reflect.Type
+	// avs 列表值
+	avs reflect.Value
+	// item 从类型新创建的值
+	item reflect.Value
+	// keys 从item上的键
+	keys map[string]reflect.Value
+	// fields 可以放入Scan中的值指针
 	fields []interface{}
 }
 
@@ -43,17 +48,23 @@ func (b *binder) parseSlideAll() (err error) {
 	if err != nil {
 		return
 	}
-
-	b.decode(b.item.Elem())
-
-	err = b.merge(cts)
-	if err != nil {
-		return
-	}
-
 	for b.rows.Next() {
+		// 清空重构
+		b.fields = []interface{}{}
+		b.item = reflect.New(b.ats.Elem().Elem())
+		b.keys = make(map[string]reflect.Value)
+		// 将新创建的对象上的数据项根据tag映射到key
+		b.decode(b.item.Elem())
+		// 将key上的指针按column类型顺序整理进`b.fields`数组中
+		err = b.merge(cts)
+		if err != nil {
+			return
+		}
+
+		// 读入数据至`b.fields`指针中。
 		err = b.rows.Scan(b.fields...)
 		// 记下错误，同时也赋值，不因为个别字段问题丧失所有数据
+		// 将`b.fields`里指针映射的数据：`b.item`合并到`b.avs` slice数组中
 		b.avs.Elem().Set(reflect.Append(b.avs.Elem(), b.item.Elem()))
 	}
 	return
@@ -147,6 +158,9 @@ func (b *binder) canScan(t1 *sql.ColumnType, t2 reflect.Type) bool {
 	if t1.ScanType() == t2 || "*"+t1.ScanType().String() == t2.String() {
 		return true
 	} else {
+		if t1.ScanType().String() == "time.Time" && t2.String() == "json_data.JsonDate" {
+			return true
+		}
 		if len(t1.DatabaseTypeName()) > 2 && t1.DatabaseTypeName()[0:3] == "INT" {
 			return t1.ScanType().String()[0:3] == "int" && t2.String()[0:3] == "int"
 		} else if t1.ScanType().String() == "time.Time" && t2.String() == "pq.NullTime" {
