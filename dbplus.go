@@ -38,6 +38,10 @@ func (db *DbPlus) handleError(err error) {
 	}
 }
 
+func (db *DbPlus) Writer() *sql.DB {
+	return db.dbs[0]
+}
+
 func (db *DbPlus) detect(sql string) *sql.DB {
 	if !strings.HasPrefix(strings.ToLower(sql), "select") {
 		return db.dbs[0]
