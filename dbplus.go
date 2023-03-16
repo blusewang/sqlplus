@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 type DbPlus struct {
-	p   uint8
+	p   int32
 	dbs []*sql.DB
 }
 
@@ -48,9 +49,9 @@ func (db *DbPlus) detect(sql string) *sql.DB {
 	} else if len(db.dbs) == 1 {
 		return db.dbs[0]
 	} else {
-		db.p++
-		if db.p == 0 || db.p >= uint8(len(db.dbs)) {
-			db.p = 1
+		atomic.AddInt32(&db.p, 1)
+		if db.p == 0 || db.p >= int32(len(db.dbs)) {
+			atomic.SwapInt32(&db.p, 1)
 		}
 		return db.dbs[db.p]
 	}
