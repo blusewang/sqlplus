@@ -119,6 +119,8 @@ type jsonField struct {
 
 func (jf *jsonField) Scan(src interface{}) (err error) {
 	switch src.(type) {
+	case json.RawMessage:
+		err = json.Unmarshal(src.(json.RawMessage), jf.Field)
 	case string:
 		err = json.Unmarshal([]byte(src.(string)), jf.Field)
 	case []byte:

@@ -6,13 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
 type DbPlus struct {
 	p   int32
 	dbs []*sql.DB
+	l   sync.Mutex
 }
 
 func Open(driverName string, dsns ...string) (dp *DbPlus, err error) {
@@ -49,12 +50,36 @@ func (db *DbPlus) detect(sql string) *sql.DB {
 	} else if len(db.dbs) == 1 {
 		return db.dbs[0]
 	} else {
-		atomic.AddInt32(&db.p, 1)
+		db.l.Lock()
+		defer db.l.Unlock()
+		db.p++
 		if db.p == 0 || db.p >= int32(len(db.dbs)) {
-			atomic.SwapInt32(&db.p, 1)
+			db.p = 1
 		}
 		return db.dbs[db.p]
 	}
+}
+
+func (db *DbPlus) QueryStructContext(ctx context.Context, obj interface{}, query string, args ...interface{}) (err error) {
+	var b binder
+
+	err = b.analysisStruct(obj)
+	if err != nil {
+		return
+	}
+
+	b.rows, err = db.QueryContext(ctx, b.mustLimit1(query), args...)
+	if err != nil {
+		return
+	}
+	defer b.rows.Close()
+
+	err = b.parseStruct()
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 func (db *DbPlus) QueryStruct(obj interface{}, query string, args ...interface{}) (err error) {
@@ -76,6 +101,27 @@ func (db *DbPlus) QueryStruct(obj interface{}, query string, args ...interface{}
 		return
 	}
 
+	return
+}
+
+func (db *DbPlus) QuerySliceContext(ctx context.Context, list interface{}, query string, args ...interface{}) (err error) {
+	var b binder
+
+	err = b.analysisSlice(list)
+	if err != nil {
+		return
+	}
+
+	b.rows, err = db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return
+	}
+	defer b.rows.Close()
+
+	err = b.parseSlideAll()
+	if err != nil {
+		return
+	}
 	return
 }
 
