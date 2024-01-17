@@ -153,7 +153,19 @@ func (db *DbPlus) Exists(query string, args ...interface{}) (exists bool, err er
 		return false, errors.New("just support select query")
 	}
 	err = db.QueryRow(fmt.Sprintf("select exists (%s)", query), args...).Scan(&exists)
-	if err != nil && err == sql.ErrNoRows {
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
+}
+
+// ExistsContext 判断记录是否存在
+func (db *DbPlus) ExistsContext(c context.Context, query string, args ...interface{}) (exists bool, err error) {
+	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") {
+		return false, errors.New("just support select query")
+	}
+	err = db.QueryRowContext(c, fmt.Sprintf("select exists (%s)", query), args...).Scan(&exists)
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
 	return
