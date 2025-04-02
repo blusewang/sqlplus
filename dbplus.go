@@ -5,22 +5,27 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"log"
 	"strings"
 	"sync"
 	"time"
 )
 
 type DbPlus struct {
-	p   int32
-	dbs []*sql.DB
-	l   sync.Mutex
+	p      int32
+	dbs    []*sql.DB
+	l      sync.Mutex
+	tracer trace.Tracer
 }
 
-func Open(driverName string, dsns ...string) (dp *DbPlus, err error) {
+func Open(driverName string, t trace.Tracer, dsns ...string) (dp *DbPlus, err error) {
 	if len(dsns) < 1 || len(dsns) > 254 {
 		err = fmt.Errorf("连接至少一个，或低于255个")
 	}
-	dp = &DbPlus{}
+	dp = &DbPlus{tracer: t}
 	for _, dsn := range dsns {
 		if db, err := sql.Open(driverName, dsn); err == nil {
 			dp.dbs = append(dp.dbs, db)
@@ -45,13 +50,19 @@ func (db *DbPlus) Writer() *sql.DB {
 }
 
 func (db *DbPlus) detect(sql string) *sql.DB {
-	if !strings.HasPrefix(strings.ToLower(sql), "select") {
+	if db == nil {
+		log.Println("no sql connection")
+		return nil
+	}
+	db.l.Lock()
+	defer db.l.Unlock()
+	if !strings.HasPrefix(strings.ToLower(sql), "select") &&
+		!strings.HasPrefix(strings.ToLower(sql), "with") &&
+		!strings.HasPrefix(strings.ToLower(sql), "refresh") {
 		return db.dbs[0]
 	} else if len(db.dbs) == 1 {
 		return db.dbs[0]
 	} else {
-		db.l.Lock()
-		defer db.l.Unlock()
 		db.p++
 		if db.p == 0 || db.p >= int32(len(db.dbs)) {
 			db.p = 1
@@ -149,7 +160,9 @@ func (db *DbPlus) QuerySlice(list interface{}, query string, args ...interface{}
 
 // Exists 判断记录是否存在
 func (db *DbPlus) Exists(query string, args ...interface{}) (exists bool, err error) {
-	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") {
+	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") &&
+		!strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "with") &&
+		strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "refresh") {
 		return false, errors.New("just support select query")
 	}
 	err = db.QueryRow(fmt.Sprintf("select exists (%s)", query), args...).Scan(&exists)
@@ -161,7 +174,9 @@ func (db *DbPlus) Exists(query string, args ...interface{}) (exists bool, err er
 
 // ExistsContext 判断记录是否存在
 func (db *DbPlus) ExistsContext(c context.Context, query string, args ...interface{}) (exists bool, err error) {
-	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") {
+	if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "select") &&
+		!strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "with") &&
+		!strings.HasPrefix(strings.TrimSpace(strings.ToLower(query)), "refresh") {
 		return false, errors.New("just support select query")
 	}
 	err = db.QueryRowContext(c, fmt.Sprintf("select exists (%s)", query), args...).Scan(&exists)
@@ -190,7 +205,15 @@ func (db *DbPlus) Prepare(query string) (*sql.Stmt, error) {
 }
 
 func (db *DbPlus) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	return db.detect(query).PrepareContext(ctx, query)
+	_ctx, span := db.tracer.Start(ctx, "db.prepare")
+	defer span.End()
+	span.SetAttributes(attribute.String("query", query))
+	stmt, err := db.detect(query).PrepareContext(_ctx, query)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
+	}
+	return stmt, err
 }
 
 func (db *DbPlus) Exec(query string, args ...interface{}) (sql.Result, error) {
@@ -198,7 +221,15 @@ func (db *DbPlus) Exec(query string, args ...interface{}) (sql.Result, error) {
 }
 
 func (db *DbPlus) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return db.detect(query).ExecContext(ctx, query, args...)
+	_ctx, span := db.tracer.Start(ctx, "db.exec")
+	defer span.End()
+	span.SetAttributes(attribute.String("query", query))
+	res, err := db.detect(query).ExecContext(_ctx, query, args...)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
+	}
+	return res, err
 }
 
 func (db *DbPlus) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -206,7 +237,15 @@ func (db *DbPlus) Query(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 func (db *DbPlus) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return db.detect(query).QueryContext(ctx, query, args...)
+	_ctx, span := db.tracer.Start(ctx, "db.query")
+	defer span.End()
+	span.SetAttributes(attribute.String("query", query))
+	res, err := db.detect(query).QueryContext(_ctx, query, args...)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
+	}
+	return res, err
 }
 
 func (db *DbPlus) QueryRow(query string, args ...interface{}) *sql.Row {
@@ -214,7 +253,10 @@ func (db *DbPlus) QueryRow(query string, args ...interface{}) *sql.Row {
 }
 
 func (db *DbPlus) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return db.detect(query).QueryRowContext(ctx, query, args...)
+	_ctx, span := db.tracer.Start(ctx, "db.query.row")
+	defer span.End()
+	span.SetAttributes(attribute.String("query", query))
+	return db.detect(query).QueryRowContext(_ctx, query, args...)
 }
 
 func (db *DbPlus) SetMaxIdleConns(ns ...int) {

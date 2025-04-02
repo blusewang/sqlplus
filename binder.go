@@ -113,8 +113,24 @@ func (b *binder) mustLimit1(query string) string {
 	return query
 }
 
+type pointField struct {
+	Field reflect.Value
+}
+
+func (pf *pointField) Scan(value any) (err error) {
+	if value == nil {
+		return
+	} else if pf.Field.Kind() == reflect.Ptr {
+		str := fmt.Sprintf("(%v,%v)", value.([]float64)[0], value.([]float64)[1])
+		pf.Field.Set(reflect.ValueOf(&str))
+	} else {
+		pf.Field.SetString(fmt.Sprintf("(%v,%v)", value.([]float64)[0], value.([]float64)[1]))
+	}
+	return
+}
+
 type jsonField struct {
-	Field interface{}
+	Field any
 }
 
 func (jf *jsonField) Scan(src interface{}) (err error) {
@@ -139,6 +155,8 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 			} else {
 				if v.DatabaseTypeName() == "PgTypeJsonb" || v.DatabaseTypeName() == "PgTypeJson" {
 					b.fields = append(b.fields, &jsonField{f.Addr().Interface()})
+				} else if v.DatabaseTypeName() == "PgTypePoint" {
+					b.fields = append(b.fields, &pointField{f})
 				} else {
 					log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
 					b.fields = append(b.fields, reflect.New(v.ScanType()).Interface())
