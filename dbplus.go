@@ -3,29 +3,30 @@ package sqlplus
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"log"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 )
 
 type DbPlus struct {
-	p      int32
-	dbs    []*sql.DB
-	l      sync.Mutex
-	tracer trace.Tracer
+	p   int32
+	dbs []*sql.DB
+	l   sync.Mutex
 }
 
-func Open(driverName string, t trace.Tracer, dsns ...string) (dp *DbPlus, err error) {
+func Open(driverName string, dsns ...string) (dp *DbPlus, err error) {
 	if len(dsns) < 1 || len(dsns) > 254 {
 		err = fmt.Errorf("连接至少一个，或低于255个")
 	}
-	dp = &DbPlus{tracer: t}
+	dp = &DbPlus{}
 	for _, dsn := range dsns {
 		if db, err := sql.Open(driverName, dsn); err == nil {
 			dp.dbs = append(dp.dbs, db)
@@ -205,7 +206,7 @@ func (db *DbPlus) Prepare(query string) (*sql.Stmt, error) {
 }
 
 func (db *DbPlus) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	_ctx, span := db.tracer.Start(ctx, "db.prepare")
+	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.prepare")
 	defer span.End()
 	span.SetAttributes(attribute.String("query", query))
 	stmt, err := db.detect(query).PrepareContext(_ctx, query)
@@ -217,13 +218,21 @@ func (db *DbPlus) PrepareContext(ctx context.Context, query string) (*sql.Stmt, 
 }
 
 func (db *DbPlus) Exec(query string, args ...interface{}) (sql.Result, error) {
+	args = db.argsTransaction(args)
 	return db.ExecContext(context.Background(), query, args...)
 }
 
+func (db *DbPlus) toString(d any) string {
+	raw, _ := json.Marshal(d)
+	return string(raw)
+}
+
 func (db *DbPlus) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	_ctx, span := db.tracer.Start(ctx, "db.exec")
+	args = db.argsTransaction(args)
+	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.exec")
 	defer span.End()
 	span.SetAttributes(attribute.String("query", query))
+	span.SetAttributes(attribute.String("args", db.toString(args)))
 	res, err := db.detect(query).ExecContext(_ctx, query, args...)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
@@ -233,13 +242,16 @@ func (db *DbPlus) ExecContext(ctx context.Context, query string, args ...interfa
 }
 
 func (db *DbPlus) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	args = db.argsTransaction(args)
 	return db.QueryContext(context.Background(), query, args...)
 }
 
 func (db *DbPlus) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	_ctx, span := db.tracer.Start(ctx, "db.query")
+	args = db.argsTransaction(args)
+	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.query")
 	defer span.End()
 	span.SetAttributes(attribute.String("query", query))
+	span.SetAttributes(attribute.String("args", db.toString(args)))
 	res, err := db.detect(query).QueryContext(_ctx, query, args...)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
@@ -249,13 +261,27 @@ func (db *DbPlus) QueryContext(ctx context.Context, query string, args ...interf
 }
 
 func (db *DbPlus) QueryRow(query string, args ...interface{}) *sql.Row {
+	args = db.argsTransaction(args)
 	return db.QueryRowContext(context.Background(), query, args...)
 }
 
+func (db *DbPlus) argsTransaction(args []any) (args2 []any) {
+	for _, arg := range args {
+		if reflect.TypeOf(arg).Kind() == reflect.Ptr {
+			args2 = append(args2, reflect.ValueOf(arg).Elem().Interface())
+		} else {
+			args2 = append(args2, arg)
+		}
+	}
+	return
+}
+
 func (db *DbPlus) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	_ctx, span := db.tracer.Start(ctx, "db.query.row")
+	args = db.argsTransaction(args)
+	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.query.row")
 	defer span.End()
 	span.SetAttributes(attribute.String("query", query))
+	span.SetAttributes(attribute.String("args", db.toString(args)))
 	return db.detect(query).QueryRowContext(_ctx, query, args...)
 }
 
