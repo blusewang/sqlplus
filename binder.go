@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 )
@@ -158,8 +157,9 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 				} else if v.DatabaseTypeName() == "PgTypePoint" {
 					b.fields = append(b.fields, &pointField{f})
 				} else {
-					log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
-					b.fields = append(b.fields, reflect.New(v.ScanType()).Interface())
+					//log.Println("ParseRows type not pare -> ", v.Name(), v.DatabaseTypeName(), v.ScanType(), f.Type())
+					b.fields = append(b.fields, f.Addr().Interface())
+					//b.fields = append(b.fields, reflect.New(v.ScanType()).Interface())
 				}
 			}
 		} else {
@@ -167,8 +167,8 @@ func (b *binder) merge(cts []*sql.ColumnType) (err error) {
 				如果查询出的字段，不在struct有标记的field中，会导致Scan时数量对不上的问题
 				为了补齐，需创建一个对应字段类型的变量指针
 			*/
-			f := reflect.New(v.ScanType()).Interface()
-			b.fields = append(b.fields, &f)
+			_f := reflect.New(v.ScanType()).Interface()
+			b.fields = append(b.fields, &_f)
 		}
 	}
 	return

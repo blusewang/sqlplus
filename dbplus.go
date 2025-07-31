@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+var OtelEnabled = true
+
 type DbPlus struct {
 	p   int32
 	dbs []*sql.DB
@@ -206,15 +208,18 @@ func (db *DbPlus) Prepare(query string) (*sql.Stmt, error) {
 }
 
 func (db *DbPlus) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.prepare")
-	defer span.End()
-	span.SetAttributes(attribute.String("query", query))
-	stmt, err := db.detect(query).PrepareContext(_ctx, query)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		span.RecordError(err)
+	if OtelEnabled {
+		_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.prepare")
+		defer span.End()
+		span.SetAttributes(attribute.String("query", query))
+		stmt, err := db.detect(query).PrepareContext(_ctx, query)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+		}
+		return stmt, err
 	}
-	return stmt, err
+	return db.detect(query).PrepareContext(ctx, query)
 }
 
 func (db *DbPlus) Exec(query string, args ...interface{}) (sql.Result, error) {
@@ -228,17 +233,20 @@ func (db *DbPlus) toString(d any) string {
 }
 
 func (db *DbPlus) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	args = db.argsTransaction(args)
-	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.exec")
-	defer span.End()
-	span.SetAttributes(attribute.String("query", query))
-	span.SetAttributes(attribute.String("args", db.toString(args)))
-	res, err := db.detect(query).ExecContext(_ctx, query, args...)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		span.RecordError(err)
+	if OtelEnabled {
+		args = db.argsTransaction(args)
+		_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.exec")
+		defer span.End()
+		span.SetAttributes(attribute.String("query", query))
+		span.SetAttributes(attribute.String("args", db.toString(args)))
+		res, err := db.detect(query).ExecContext(_ctx, query, args...)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+		}
+		return res, err
 	}
-	return res, err
+	return db.detect(query).ExecContext(ctx, query, args...)
 }
 
 func (db *DbPlus) Query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -247,17 +255,20 @@ func (db *DbPlus) Query(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 func (db *DbPlus) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	args = db.argsTransaction(args)
-	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.query")
-	defer span.End()
-	span.SetAttributes(attribute.String("query", query))
-	span.SetAttributes(attribute.String("args", db.toString(args)))
-	res, err := db.detect(query).QueryContext(_ctx, query, args...)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		span.RecordError(err)
+	if OtelEnabled {
+		args = db.argsTransaction(args)
+		_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.query")
+		defer span.End()
+		span.SetAttributes(attribute.String("query", query))
+		span.SetAttributes(attribute.String("args", db.toString(args)))
+		res, err := db.detect(query).QueryContext(_ctx, query, args...)
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			span.RecordError(err)
+		}
+		return res, err
 	}
-	return res, err
+	return db.detect(query).QueryContext(ctx, query, args...)
 }
 
 func (db *DbPlus) QueryRow(query string, args ...interface{}) *sql.Row {
@@ -267,8 +278,16 @@ func (db *DbPlus) QueryRow(query string, args ...interface{}) *sql.Row {
 
 func (db *DbPlus) argsTransaction(args []any) (args2 []any) {
 	for _, arg := range args {
-		if reflect.TypeOf(arg).Kind() == reflect.Ptr {
-			args2 = append(args2, reflect.ValueOf(arg).Elem().Interface())
+		if arg == nil {
+			args2 = append(args2, arg)
+		} else if v := reflect.ValueOf(arg); v.Kind() == reflect.Ptr {
+			if v.IsNil() {
+				// 如果是 nil 指针（如 `var ptr *int` 未初始化），直接存 nil
+				args2 = append(args2, nil)
+			} else {
+				// 只有非 nil 指针才调用 .Elem().Interface()
+				args2 = append(args2, v.Elem().Interface())
+			}
 		} else {
 			args2 = append(args2, arg)
 		}
@@ -277,12 +296,15 @@ func (db *DbPlus) argsTransaction(args []any) (args2 []any) {
 }
 
 func (db *DbPlus) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	args = db.argsTransaction(args)
-	_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.query.row")
-	defer span.End()
-	span.SetAttributes(attribute.String("query", query))
-	span.SetAttributes(attribute.String("args", db.toString(args)))
-	return db.detect(query).QueryRowContext(_ctx, query, args...)
+	if OtelEnabled {
+		args = db.argsTransaction(args)
+		_ctx, span := otel.Tracer("sql.plus").Start(ctx, "db.query.row")
+		defer span.End()
+		span.SetAttributes(attribute.String("query", query))
+		span.SetAttributes(attribute.String("args", db.toString(args)))
+		return db.detect(query).QueryRowContext(_ctx, query, args...)
+	}
+	return db.detect(query).QueryRowContext(ctx, query, args...)
 }
 
 func (db *DbPlus) SetMaxIdleConns(ns ...int) {
